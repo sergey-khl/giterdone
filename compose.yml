@@ -1,0 +1,13 @@
+services:
+  wrong-number:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wrong-number
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env
+    image: wrongnumber/app
+    volumes:
+      - ./src/:/home/user/app/src/
