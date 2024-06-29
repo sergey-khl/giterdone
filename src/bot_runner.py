@@ -9,6 +9,7 @@ Refer to README for more information.
 import os
 import argparse
 import subprocess
+import signal
 import atexit
 from pipecat.transports.services.helpers.daily_rest import DailyRESTHelper, DailyRoomObject
 from fastapi import FastAPI, HTTPException
@@ -32,21 +33,26 @@ bot_procs = {}
 def cleanup(pid: int = None):
     # Clean up function, just to be extra safe
     if pid:
-        bot_procs.get(pid)
+        proc = bot_procs.get(pid)
 
         # If the subprocess doesn't exist, return an error
         if not proc:
             raise HTTPException(
                 status_code=404, detail=f"Bot with process id: {pid} not found")
         
-        proc[0].terminate()
-        proc[0].wait()
+        terminateBot(proc[0])
+        # proc[0].terminate()
+        # proc[0].wait()
         del bot_procs[pid]
     else:
         for pid, proc in bot_procs.items():
-            proc[0].terminate()
-            proc[0].wait()
+            terminateBot(proc[0])
+            # proc[0].terminate()
+            # proc[0].wait()
         bot_procs.clear()
+
+def terminateBot(proc):
+    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
 
 atexit.register(cleanup)
 
@@ -99,7 +105,8 @@ def _create_daily_room(room_url) -> tuple[DailyRoomObject, int]:
             [bot_proc],
             shell=True,
             bufsize=1,
-            cwd=os.path.dirname(os.path.abspath(__file__))
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            preexec_fn=os.setsid
         )
         bot_procs[proc.pid] = (proc, room_url)
     except Exception as e:

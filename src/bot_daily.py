@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import logging
 import os
+import signal
 import argparse
 
 from pipecat.pipeline.pipeline import Pipeline
@@ -29,7 +30,6 @@ logger.setLevel(logging.DEBUG)
 
 daily_api_key = os.getenv("DAILY_API_KEY", "")
 daily_api_url = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
-
 
 async def main(room_url: str, token: str):
     async with aiohttp.ClientSession() as session:
@@ -94,6 +94,7 @@ async def main(room_url: str, token: str):
 
         @transport.event_handler("on_app_message")
         async def on_app_message(transport, message, sender):
+            print("APP MESSAGE")
             print(message, sender, messages)
             
 
