@@ -2,7 +2,6 @@ import asyncio
 import aiohttp
 import logging
 import os
-import sys
 import argparse
 
 from pipecat.pipeline.pipeline import Pipeline
@@ -15,7 +14,7 @@ from pipecat.frames.frames import (
 )
 from pipecat.services.openai import OpenAILLMService
 from pipecat.services.playht import PlayHTTTSService
-from pipecat.transports.services.daily import DailyParams, DailyTransport, DailyDialinSettings
+from pipecat.transports.services.daily import DailyParams, DailyTransport 
 from pipecat.vad.silero import SileroVADAnalyzer
 from loguru import logger
 

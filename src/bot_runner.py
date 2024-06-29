@@ -9,10 +9,11 @@ Refer to README for more information.
 import os
 import argparse
 import subprocess
-from pipecat.transports.services.helpers.daily_rest import DailyRESTHelper, DailyRoomObject, DailyRoomProperties, DailyRoomSipParams, DailyRoomParams
-from fastapi import FastAPI, Request, HTTPException
+import atexit
+from pipecat.transports.services.helpers.daily_rest import DailyRESTHelper, DailyRoomObject
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
@@ -25,10 +26,33 @@ REQUIRED_ENV_VARS = ['OPENAI_API_KEY', 'DAILY_API_KEY',
                      'PLAYHT_USER_ID', 'PLAYHT_API_KEY',
                      'DAILY_API_URL']
 
+# Bot sub-process dict for status reporting and concurrency control
+bot_procs = {}
+
+def cleanup(pid: int = None):
+    # Clean up function, just to be extra safe
+    if pid:
+        bot_procs.get(pid)
+
+        # If the subprocess doesn't exist, return an error
+        if not proc:
+            raise HTTPException(
+                status_code=404, detail=f"Bot with process id: {pid} not found")
+        
+        proc[0].terminate()
+        proc[0].wait()
+        del bot_procs[pid]
+    else:
+        for pid, proc in bot_procs.items():
+            proc[0].terminate()
+            proc[0].wait()
+        bot_procs.clear()
+
+atexit.register(cleanup)
+
 daily_rest_helper = DailyRESTHelper(
     os.getenv("DAILY_API_KEY", ""),
     os.getenv("DAILY_API_URL", 'https://api.daily.co/v1'))
-
 
 # ----------------- API ----------------- #
 
@@ -46,7 +70,12 @@ app.add_middleware(
 Create Daily room, When the vendor is Daily, the bot handles the call forwarding automatically,
 i.e, forwards the call from the "hold music state" to the Daily Room's SIP URI.
 """
-def _create_daily_room(room_url):
+def _create_daily_room(room_url) -> tuple[DailyRoomObject, int]:
+    num_bots_in_room = sum(1 for proc in bot_procs.values() if proc[1] == room_url and proc[0].poll() is None)
+    print("number of bots in room ", num_bots_in_room)
+    if num_bots_in_room >= 1:
+        raise HTTPException(status_code=500, detail=f"Max bot limited reach for room: {room_url}")
+
     try:
         print(f"Joining existing room: {room_url}")
         room: DailyRoomObject = daily_rest_helper.get_room_from_url(room_url)
@@ -63,24 +92,25 @@ def _create_daily_room(room_url):
         raise HTTPException(
             status_code=500, detail=f"Failed to get room or token token")
 
-    bot_proc = f"python3 -m ./src/bot_daily -u {room.url} -t {token}"
+    bot_proc = f"python3 -m bot_daily -u {room.url} -t {token}"
 
     try:
-        subprocess.Popen(
+        proc = subprocess.Popen(
             [bot_proc],
             shell=True,
             bufsize=1,
             cwd=os.path.dirname(os.path.abspath(__file__))
         )
+        bot_procs[proc.pid] = (proc, room_url)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to start subprocess: {e}")
 
-    return room
+    return room, proc.pid
 
 
 @app.post("/daily_start_bot")
-async def daily_start_bot(request: Request) -> JSONResponse:
+async def daily_start_bot() -> JSONResponse:
     # The /daily_start_bot is invoked when a call is received on Daily's SIP URI
     # daily_start_bot will create the room, put the call on hold until
     # the bot and sip worker are ready. Daily will automatically
@@ -89,13 +119,42 @@ async def daily_start_bot(request: Request) -> JSONResponse:
     # Use specified room URL, or create a new one if not specified
     room_url = os.getenv("DAILY_SAMPLE_ROOM_URL", None)
 
-    room: DailyRoomObject = _create_daily_room( room_url)
+    room, proc_pid = _create_daily_room(room_url)
 
     # Grab a token for the user to join with
     return JSONResponse({
         "room_url": room.url,
-        "sipUri": room.config.sip_endpoint
+        "sipUri": room.config.sip_endpoint,
+        "proc_pid": proc_pid
     })
+
+@app.get("/status/{pid}")
+def get_status(pid: int):
+    # Look up the subprocess
+    proc = bot_procs.get(pid)
+
+    # If the subprocess doesn't exist, return an error
+    if not proc:
+        raise HTTPException(
+            status_code=404, detail=f"Bot with process id: {pid} not found")
+
+    # Check the status of the subprocess
+    if proc[0].poll() is None:
+        status = "running"
+    else:
+        status = "finished"
+
+    return JSONResponse({"bot_id": pid, "status": status})
+
+@app.delete("/remove-bot/all")
+def get_status():
+    cleanup()
+    return JSONResponse(list(bot_procs.keys()))
+
+@app.delete("/remove-bot/{pid}")
+def get_status(pid: int):
+    cleanup(pid)
+    return JSONResponse(list(bot_procs.keys()))
 
 # ----------------- Main ----------------- #
 
