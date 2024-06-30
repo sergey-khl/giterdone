@@ -41,14 +41,10 @@ def cleanup(pid: int = None):
                 status_code=404, detail=f"Bot with process id: {pid} not found")
         
         terminateBot(proc[0])
-        # proc[0].terminate()
-        # proc[0].wait()
         del bot_procs[pid]
     else:
         for pid, proc in bot_procs.items():
             terminateBot(proc[0])
-            # proc[0].terminate()
-            # proc[0].wait()
         bot_procs.clear()
 
 def terminateBot(proc):
