@@ -12,11 +12,13 @@ from pipecat.processors.aggregators.llm_response import (
     LLMUserContextAggregator,
     LLMAssistantContextAggregator,
     OpenAILLMContextFrame,
+    LLMUserResponseAggregator,
+    LLMAssistantResponseAggregator
 )
 from pipecat.processors.logger import FrameLogger
 from pipecat.frames.frames import LLMMessagesFrame, EndFrame
 from pipecat.services.openai import OpenAILLMService
-from pipecat.services.playht import PlayHTTTSService
+from pipecat.services.deepgram import DeepgramSTTService, DeepgramTTSService
 from pipecat.transports.services.daily import DailyParams, DailyTransport
 from pipecat.vad.silero import SileroVADAnalyzer
 from loguru import logger
@@ -54,49 +56,51 @@ async def main(room_url: str, token: str):
             ),
         )
 
-        tts = PlayHTTTSService(
-            user_id=os.getenv("PLAYHT_USER_ID"),
-            api_key=os.getenv("PLAYHT_API_KEY"),
-            voice_url="s3://voice-cloning-zero-shot/143f9a08-46a5-4d51-9d86-266d23d743c0/original/manifest.json",
-        )
-
         llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o")
 
-        messages = []
-        context = OpenAILLMContext(messages=messages)
-        user_context = LLMUserContextAggregator(context)
-        assistant_context = LLMAssistantContextAggregator(context)
+        messages = [BASE_PROMPT]
+        # context = OpenAILLMContext(messages=messages)
+        # user_context = LLMUserContextAggregator(context)
+        # assistant_context = LLMAssistantContextAggregator(context)
 
-        intake = IntakeProcessor(context, llm)
-        llm.register_function(
-            "accept_hot_dog",
-            intake.start_hot_dog,
-        )
-        llm.register_function("accept_mistake", intake.start_mistake)
-        llm.register_function("accept_vow", intake.start_vow)
+        # intake = IntakeProcessor(context, llm)
+        # llm.register_function(
+        #     "accept_hot_dog",
+        #     intake.start_hot_dog,
+        # )
+        # llm.register_function("accept_mistake", intake.start_mistake)
+        # llm.register_function("accept_vow", intake.start_vow)
 
         fl = FrameLogger("LLM Output")
 
-        pipeline = Pipeline(
-            [
-                transport.input(),  # Transport input
-                user_context,  # User responses
-                llm,  # LLM
-                fl,  # Frame logger
-                tts,  # TTS
-                transport.output(),  # Transport output
-                assistant_context,  # Assistant responses
-            ]
+        tma_in = LLMUserResponseAggregator(messages)
+        tma_out = LLMAssistantResponseAggregator(messages)
+
+        stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
+
+        tts = DeepgramTTSService(
+            aiohttp_session=session,
+            api_key=os.getenv("DEEPGRAM_API_KEY"),
+            voice="aura-helios-en"
         )
+
+        pipeline = Pipeline([
+            transport.input(),
+            tma_in,
+            llm,
+            fl,
+            tts,
+            transport.output(),
+            tma_out,
+        ])
 
         task = PipelineTask(pipeline, PipelineParams(allow_interruptions=True))
 
         @transport.event_handler("on_first_participant_joined")
         async def on_first_participant_joined(transport, participant):
             transport.capture_participant_transcription(participant["id"])
-            # await task.queue_frames([LLMMessagesFrame(messages)])
-            print(f"Context is: {context}")
-            await task.queue_frames([OpenAILLMContextFrame(context)])
+            await task.queue_frames([LLMMessagesFrame(messages)])
+            # await task.queue_frames([OpenAILLMContextFrame(context)])
 
         @transport.event_handler("on_participant_left")
         async def on_participant_left(transport, participant, reason):

@@ -24,8 +24,7 @@ load_dotenv(override=True)
 
 MAX_SESSION_TIME = 5 * 60  # 5 minutes
 REQUIRED_ENV_VARS = ['OPENAI_API_KEY', 'DAILY_API_KEY',
-                     'PLAYHT_USER_ID', 'PLAYHT_API_KEY',
-                     'DAILY_API_URL']
+                     'DEEPGRAM_API_KEY', 'DAILY_API_URL']
 
 # Bot sub-process dict for status reporting and concurrency control
 bot_procs = {}
