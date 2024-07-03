@@ -13,7 +13,7 @@ from pipecat.processors.aggregators.llm_response import (
     LLMAssistantContextAggregator,
     OpenAILLMContextFrame,
     LLMUserResponseAggregator,
-    LLMAssistantResponseAggregator
+    LLMAssistantResponseAggregator,
 )
 from pipecat.processors.logger import FrameLogger
 from pipecat.frames.frames import LLMMessagesFrame, EndFrame
@@ -56,51 +56,49 @@ async def main(room_url: str, token: str):
             ),
         )
 
-        llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o")
+        llm = OpenAILLMService(
+            api_key=os.getenv("OPENAI_API_KEY"), model="gpt-3.5-turbo"
+        )
 
         messages = [BASE_PROMPT]
-        # context = OpenAILLMContext(messages=messages)
-        # user_context = LLMUserContextAggregator(context)
-        # assistant_context = LLMAssistantContextAggregator(context)
+        context = OpenAILLMContext(messages=messages)
+        user_context = LLMUserContextAggregator(context)
+        assistant_context = LLMAssistantContextAggregator(context)
 
-        # intake = IntakeProcessor(context, llm)
-        # llm.register_function(
-        #     "accept_hot_dog",
-        #     intake.start_hot_dog,
-        # )
-        # llm.register_function("accept_mistake", intake.start_mistake)
-        # llm.register_function("accept_vow", intake.start_vow)
+        intake = IntakeProcessor(context, llm)
+        llm.register_function("update_todo_list", intake.updateTodo)
 
         fl = FrameLogger("LLM Output")
 
-        tma_in = LLMUserResponseAggregator(messages)
-        tma_out = LLMAssistantResponseAggregator(messages)
-
-        stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
+        # tma_in = LLMUserResponseAggregator(messages)
+        # tma_out = LLMAssistantResponseAggregator(messages)
 
         tts = DeepgramTTSService(
             aiohttp_session=session,
             api_key=os.getenv("DEEPGRAM_API_KEY"),
-            voice="aura-helios-en"
+            voice="aura-helios-en",
         )
 
-        pipeline = Pipeline([
-            transport.input(),
-            tma_in,
-            llm,
-            fl,
-            tts,
-            transport.output(),
-            tma_out,
-        ])
+        pipeline = Pipeline(
+            [
+                transport.input(),
+                # tma_in,
+                user_context,
+                llm,
+                fl,
+                tts,
+                transport.output(),
+                assistant_context,
+            ]
+        )
 
-        task = PipelineTask(pipeline, PipelineParams(allow_interruptions=True))
+        task = PipelineTask(pipeline, PipelineParams(allow_interruptions=False))
 
         @transport.event_handler("on_first_participant_joined")
         async def on_first_participant_joined(transport, participant):
             transport.capture_participant_transcription(participant["id"])
-            await task.queue_frames([LLMMessagesFrame(messages)])
-            # await task.queue_frames([OpenAILLMContextFrame(context)])
+            # await task.queue_frames([LLMMessagesFrame(messages)])
+            await task.queue_frames([OpenAILLMContextFrame(context)])
 
         @transport.event_handler("on_participant_left")
         async def on_participant_left(transport, participant, reason):
