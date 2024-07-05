@@ -28,18 +28,25 @@ class IntakeProcessor:
         super().__init__(*args, **kwargs)
         self._context: OpenAILLMContext = context
         self._llm = llm
-        self._context.set_tools([UPDATE_TODO])
+        context.set_tools([SUMMARIZE])
+        context.add_message(
+            {
+                "role": "system",
+                "content": "You will now summarize the entire conversation to get an updated to do list by calling the summarize function.",
+            }
+        )
         logger.info(f"context !!!: {self._context}")
-        self._functions = ["update_todo_list"]
+        self._functions = ["summarize"]
         self._todo = []
 
-    async def updateTodo(self, llm, args):
+    async def summarize(self, llm, args):
         # self._context.add_message(
         #     {
         #         "role": "system",
         #         "content": "Next, succinctly ask if there are any other modifications to be made.",
         #     }
         # )
+
         logger.info(f"!!! Saving PAPAPA: {self._todo}, {args}")
         if args["todo_items"] == self._todo:
             return None
@@ -47,6 +54,7 @@ class IntakeProcessor:
         logger.info(f"!!! Saving MAMAMAMA: {args}")
         # We don't need the function call in the context, so just return a new
         # system message and let the framework re-prompt
+        return None
         return [
             {
                 "role": "system",

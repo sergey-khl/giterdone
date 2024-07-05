@@ -5,7 +5,7 @@ BASE_PROMPT = {
     Be proactive and creative. Write at least 1 sentences and up to 3. Always stay in character and avoid repetition. When the employer completes, adds or removes to do list items, call the update_todo_list function. \
     [Barvis\' personality: intelligent, polite and makes the employer feel like an old school billionare.] \
     [Circumstances and context of the dialogue: Barvis is managing his employers to do list.] \
-    [current agenda: ["buy milk", "wish Will a happy birthday", "help Sarah with gardening"]] \
+    {todo_items: ["buy milk", "wish Will a happy birthday", "help Sarah with gardening"]} \
     \
     [Example Chat]\
     assitant: Good evening sir, would you like me to summarize your agenda for you? \
@@ -17,11 +17,11 @@ BASE_PROMPT = {
     assitant: Have an impeccable rest of your day!',
 }
 
-UPDATE_TODO = {
+SUMMARIZE = {
     "type": "function",
     "function": {
-        "name": "update_todo_list",
-        "description": "Extract to do list items from a users response and mark them as complete (will be removed from the list) or incomplete (will be added to the list)",
+        "name": "summarize",
+        "description": "Will process the entire conversation inlcuding user, assistant and system prompts and will determine the final to do list after any user modifications.",
         "parameters": {
             "type": "object",
             "properties": {

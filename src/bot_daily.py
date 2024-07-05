@@ -18,12 +18,15 @@ from pipecat.processors.aggregators.llm_response import (
 from pipecat.processors.logger import FrameLogger
 from pipecat.frames.frames import LLMMessagesFrame, EndFrame
 from pipecat.services.openai import OpenAILLMService
-from pipecat.services.deepgram import DeepgramSTTService, DeepgramTTSService
+from pipecat.services.deepgram import DeepgramTTSService
 from pipecat.transports.services.daily import DailyParams, DailyTransport
 from pipecat.vad.silero import SileroVADAnalyzer
 from loguru import logger
 from prompts import *
 from intake_processor import IntakeProcessor
+from pipecat.pipeline.parallel_pipeline import ParallelPipeline
+from pipecat.processors.filters.function_filter import FunctionFilter
+from pipecat.processors.frame_processor import FrameDirection
 
 from dotenv import load_dotenv
 
@@ -35,6 +38,16 @@ logger.setLevel(logging.DEBUG)
 
 daily_api_key = os.getenv("DAILY_API_KEY", "")
 daily_api_url = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
+
+current_mode = "Default"
+
+
+async def defaultFilter(frame) -> bool:
+    return current_mode == "Default"
+
+
+async def summarizerFilter(frame) -> bool:
+    return current_mode == "Summarizer"
 
 
 async def main(room_url: str, token: str):
@@ -56,17 +69,18 @@ async def main(room_url: str, token: str):
             ),
         )
 
-        llm = OpenAILLMService(
+        default_llm = OpenAILLMService(
             api_key=os.getenv("OPENAI_API_KEY"), model="gpt-3.5-turbo"
+        )
+
+        summarizer_llm = OpenAILLMService(
+            api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o"
         )
 
         messages = [BASE_PROMPT]
         context = OpenAILLMContext(messages=messages)
         user_context = LLMUserContextAggregator(context)
         assistant_context = LLMAssistantContextAggregator(context)
-
-        intake = IntakeProcessor(context, llm)
-        llm.register_function("update_todo_list", intake.updateTodo)
 
         fl = FrameLogger("LLM Output")
 
@@ -84,11 +98,16 @@ async def main(room_url: str, token: str):
                 transport.input(),
                 # tma_in,
                 user_context,
-                llm,
+                # llm,
+                ParallelPipeline(  # TTS (bot will speak the chosen language)
+                    [FunctionFilter(defaultFilter), default_llm],  # English
+                    [FunctionFilter(summarizerFilter), summarizer_llm],  # Spanish
+                ),
                 fl,
                 tts,
                 transport.output(),
                 assistant_context,
+                # tma_out
             ]
         )
 
@@ -102,7 +121,14 @@ async def main(room_url: str, token: str):
 
         @transport.event_handler("on_participant_left")
         async def on_participant_left(transport, participant, reason):
-            await task.queue_frame(EndFrame())
+            global current_mode
+            current_mode = "Summarizer"
+            intake = IntakeProcessor(context, summarizer_llm)
+            summarizer_llm.register_function("summarize", intake.summarize)
+            await summarizer_llm.process_frame(
+                OpenAILLMContextFrame(context), FrameDirection.DOWNSTREAM
+            )
+            await task.queue_frames(EndFrame())
 
         runner = PipelineRunner()
 
