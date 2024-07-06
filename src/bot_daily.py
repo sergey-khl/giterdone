@@ -128,7 +128,7 @@ async def main(room_url: str, token: str):
             await summarizer_llm.process_frame(
                 OpenAILLMContextFrame(context), FrameDirection.DOWNSTREAM
             )
-            await task.queue_frames(EndFrame())
+            await task.queue_frame(EndFrame())
 
         runner = PipelineRunner()
 
