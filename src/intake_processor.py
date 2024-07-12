@@ -4,6 +4,7 @@ from pipecat.processors.aggregators.llm_response import (
 from loguru import logger
 from prompts import *
 from typing import List
+from datetime import datetime
 
 from openai._types import NotGiven, NOT_GIVEN
 
@@ -14,6 +15,7 @@ from openai.types.chat import (
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.services.openai import OpenAILLMContext, OpenAILLMContextFrame
 from pipecat.services.ai_services import AIService
+from texter import sendSms
 
 
 class IntakeProcessor:
@@ -40,33 +42,18 @@ class IntakeProcessor:
         self._todo = []
 
     async def summarize(self, llm, args):
-        # self._context.add_message(
-        #     {
-        #         "role": "system",
-        #         "content": "Next, succinctly ask if there are any other modifications to be made.",
-        #     }
-        # )
-
-        logger.info(f"!!! Saving PAPAPA: {self._todo}, {args}")
-        if args["todo_items"] == self._todo:
-            return None
+        logger.info(f"setting todo items {args['todo_items']}")
         self._todo = args["todo_items"]
-        logger.info(f"!!! Saving MAMAMAMA: {args}")
+        await self.sendTodo()
         # We don't need the function call in the context, so just return a new
         # system message and let the framework re-prompt
         return None
-        return [
-            {
-                "role": "system",
-                "content": "Next, succinctly ask if there are any other modifications to be made. Do not call update_todo_list without a new user response.",
-            }
-        ]
-        # await llm.process_frame(
-        #     OpenAILLMContextFrame(self._context), FrameDirection.DOWNSTREAM
-        # )
 
-    async def save_data(self, llm, args):
-        logger.info(f"!!! Saving data: {args}")
-        # Since this is supposed to be "async", returning None from the callback
-        # will prevent adding anything to context or re-prompting
+    async def sendTodo(self):
+        today = datetime.today()
+        message = today.strftime("TODO for %d, %b %Y:")
+        for item in self._todo:
+            message += f"\n{item['title']}"
+        logger.info(f"sending sms {message}")
+
         return None

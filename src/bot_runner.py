@@ -183,14 +183,6 @@ def deleteBot(pid: int):
     return JSONResponse(list(bot_procs.keys()))
 
 
-@app.post("/text")
-def postText():
-    phone_number = "+14037149477"  # Replace with the recipient's phone number
-    message = "Hello from AWS SNS!"
-    sendSms(phone_number, message)
-    return JSONResponse("osidfn")
-
-
 # ----------------- Main ----------------- #
 
 
