@@ -10,4 +10,5 @@ services:
       - .env
     image: wrongnumber/app
     volumes:
+      - $HOME/.aws/credentials:/home/user/.aws/credentials:ro
       - ./src/:/home/user/app/src/

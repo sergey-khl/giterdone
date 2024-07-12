@@ -4,3 +4,5 @@ uvicorn
 requests
 python-dotenv
 loguru
+awscli
+boto3
