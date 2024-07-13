@@ -48,41 +48,7 @@ SUMMARIZE = {
     },
 }
 
-# ACCEPT_MISTAKE = {
-#     "type": "function",
-#     "function": {
-#         "name": "accept_mistake",
-#         "description": "Use this function to decide if the applicant's answer to the number one mistake when making hotdogs is acceptable.",
-#         "parameters": {
-#             "type": "object",
-#             "properties": {
-#                 "accepted": {
-#                     "type": "boolean",
-#                     "description": "The answer should be that hotdogs must be made with love. Any other mistake is not acceptable.",
-#                 }
-#             },
-#         },
-#     },
-# }
-
-# ACCEPT_VOW = {
-#     "type": "function",
-#     "function": {
-#         "name": "accept_vow",
-#         "description": "Use this function to determine if the appicant answered with 'I love hot dogs almost as much as I love America.'",
-#         "parameters": {
-#             "type": "object",
-#             "properties": {
-#                 "accepted": {
-#                     "type": "boolean",
-#                     "description": "The answer should exactly match the quote. Any other answer is not acceptable.",
-#                 }
-#             },
-#         },
-#     },
-# }
-
-# FIRST_MESSAGE_PROMPT = {
-#     "role": "assistant",
-#     "content": "Listen, I need your help. Hillary is kind of a baddie. A hottie with a body. We do not get along politically so huge challenge, huge, I know. So, any ideas? How do I win her over? And no, tweeting isn't an option. I tried that.",
-# }
+START_SUMMARIZE = {
+    "role": "system",
+    "content": "You will now summarize the entire conversation to get an updated to do list by calling the summarize function.",
+}

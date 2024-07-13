@@ -1,5 +1,5 @@
 #!/bin/bash
 
-docker inspect --type=image wrongnumber/app > /dev/null 2>&1 || ./build
+docker inspect --type=image giterdone/app > /dev/null 2>&1 || ./build
 
 docker compose up -d

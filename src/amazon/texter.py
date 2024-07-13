@@ -1,7 +1,9 @@
+import os
 import boto3
 
 # Initialize a session using Amazon SNS
-sns_client = boto3.client("sns", region_name="ca-central-1")
+aws_region = os.getenv("AWS_REGION", "")
+sns_client = boto3.client("sns", region_name=aws_region)
 
 
 # Send your sms message.

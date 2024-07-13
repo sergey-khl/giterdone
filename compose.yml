@@ -1,14 +1,14 @@
 services:
-  wrong-number:
+  giterdone:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: wrong-number
+    container_name: giterdone
     ports:
       - "7860:7860"
     env_file:
       - .env
-    image: wrongnumber/app
+    image: giterdone/app
     volumes:
       - $HOME/.aws/credentials:/home/user/.aws/credentials:ro
       - ./src/:/home/user/app/src/

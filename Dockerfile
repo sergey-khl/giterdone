@@ -38,5 +38,4 @@ RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
 COPY . ./
 
 # Start the FastAPI server
-CMD python3 src/bot_runner.py --host "0.0.0.0" --port ${FAST_API_PORT}
-# ENTRYPOINT ["tail", "-f", "/dev/null"]
+CMD python3 src/server.py --host "0.0.0.0" --port ${FAST_API_PORT}

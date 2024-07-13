@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Building wrongnumber/app"
+echo "Building giterdone/app"
 docker build \
-    --tag wrongnumber/app \
+    --tag giterdone/app \
     . > /dev/null
