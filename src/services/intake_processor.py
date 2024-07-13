@@ -37,7 +37,8 @@ class IntakeProcessor:
         today = datetime.today()
         message = today.strftime("TODO for %d, %b %Y:")
         for item in todo:
-            message += f"\n{item['title']}"
+            message += f"\n{item['emoji']} {item['title']}"
+        logger.info(f"todo {todo}")
         await self.sendTodo(message)
         # We don't need the function call in the context, so just return a new
         # system message and let the framework re-prompt
@@ -45,6 +46,6 @@ class IntakeProcessor:
 
     async def sendTodo(self, message):
         logger.info(f"sending sms {message}")
-        sendSms(self._phone, message)
+        # sendSms(self._phone, message)
 
         return None
