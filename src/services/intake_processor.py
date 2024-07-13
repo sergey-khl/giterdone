@@ -2,7 +2,7 @@ from pipecat.processors.aggregators.llm_response import (
     OpenAILLMContext,
 )
 from loguru import logger
-from bot.prompts import *
+from prompts import *
 from typing import List
 from datetime import datetime
 
@@ -14,8 +14,7 @@ from openai.types.chat import (
 
 from pipecat.services.openai import OpenAILLMContext
 from pipecat.services.ai_services import AIService
-from amazon.texter import sendSms
-
+from texter import sendSms
 
 class IntakeProcessor:
     def __init__(
@@ -26,12 +25,11 @@ class IntakeProcessor:
         *args,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
         self._context: OpenAILLMContext = context
         self._llm = llm
         context.set_tools([SUMMARIZE])
         context.add_message(START_SUMMARIZE)
-        self._phone = kwargs["phone"]
+        self._phone = kwargs.get("phone", None)
         self._functions = ["summarize"]
 
     async def summarize(self, llm, args):

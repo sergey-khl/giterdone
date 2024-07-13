@@ -20,8 +20,8 @@ from pipecat.services.deepgram import DeepgramTTSService
 from pipecat.transports.services.daily import DailyParams, DailyTransport
 from pipecat.vad.silero import SileroVADAnalyzer
 from loguru import logger
-from bot.prompts import *
-from bot.intake_processor import IntakeProcessor
+from prompts import *
+from intake_processor import IntakeProcessor
 from pipecat.processors.frame_processor import FrameDirection
 
 from dotenv import load_dotenv
