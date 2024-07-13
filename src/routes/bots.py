@@ -1,3 +1,4 @@
+import asyncio
 import os
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -15,30 +16,28 @@ async def createDailyBot(phone: str) -> JSONResponse:
 
     room_url = os.getenv("DAILY_SAMPLE_ROOM_URL", None)
 
-    room, proc_pid = runner.joinDailyRoom(room_url, phone)
+    asyncio.create_task(runner.joinDailyRoom(room_url, phone))
 
     # Grab a token for the user to join with
-    return JSONResponse(
-        {"room_url": room.url, "sipUri": room.config.sip_endpoint, "proc_pid": proc_pid}
-    )
+    return PlainTextResponse("started a bot")
 
 
 @router.get("/status/{pid}")
-def getStatus(pid: int):
-    status = runner.viewProcessStatus(pid)
+async def getStatus(pid: int):
+    status = await runner.viewProcessStatus(pid)
 
     return JSONResponse({"bot_id": pid, "status": status})
 
 
 @router.delete("/remove-bot/all")
-def deleteBots():
-    removed = runner.cleanup()
+async def deleteBots():
+    removed = await runner.cleanup()
 
     return JSONResponse(removed)
 
 
 @router.delete("/remove-bot/{pid}")
-def deleteBot(pid: int):
-    runner.cleanup(pid)
+async def deleteBot(pid: int):
+    await runner.cleanup(pid)
 
     return PlainTextResponse(f"Removed {pid}")

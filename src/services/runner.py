@@ -1,3 +1,4 @@
+import asyncio
 import atexit
 import os
 import signal
@@ -20,7 +21,7 @@ daily_rest_helper = DailyRESTHelper(
 bots = {}
 
 
-def cleanup(pid: int = None) -> list[str]:
+async def cleanup(pid: int = None) -> list[str]:
     removed = []
     # Clean up function, just to be extra safe
     if pid:
@@ -32,29 +33,41 @@ def cleanup(pid: int = None) -> list[str]:
                 status_code=404, detail=f"Bot with process id: {pid} not found"
             )
 
-        terminateBot(proc[0])
-        del bots[pid]
+        await terminateBot(proc[0])
         removed.append(pid)
     else:
-        for pid, proc in bots.items():
-            terminateBot(proc[0])
-            removed.append(pid)
-        bots.clear()
+        # make copy
+        removed = list(bots.keys())
+        for pid in removed:
+            await terminateBot(bots[pid][0])
     return removed
 
 
-def terminateBot(proc):
-    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+async def terminateBot(proc):
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        print("Process terminated due to timeout or early exit.")
+    except OSError:
+        print("Process already terminated.")
+
+    try:
+        del bots[proc.pid]
+    except Exception as e:
+        print(f"cannot delete from bots table: {e}")
 
 
-atexit.register(cleanup)
+@atexit.register
+def shutdown():
+    print("Shutting down")
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(cleanup())
 
 """
 Create a daily room
 """
 
 
-def joinDailyRoom(room_url, phone) -> tuple[DailyRoomObject, int]:
+async def joinDailyRoom(room_url, phone):
     num_bots_in_room = sum(
         1 for proc in bots.values() if proc[1] == room_url and proc[0].poll() is None
     )
@@ -83,20 +96,69 @@ def joinDailyRoom(room_url, phone) -> tuple[DailyRoomObject, int]:
     bot_proc = f"python3 -m pipeline -u {room.url} -t {token} -p {phone}"
 
     try:
-        proc = subprocess.Popen(
-            [bot_proc],
-            shell=True,
-            bufsize=1,
+        # create async process and handle timeout in the background
+        proc = await asyncio.create_subprocess_shell(
+            bot_proc,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             cwd=os.path.dirname(os.path.abspath(__file__)),
-            preexec_fn=os.setsid,
+            preexec_fn=os.setsid
         )
-        bots[proc.pid] = (proc, room_url)
+        pid = proc.pid
+        bots[pid] = (proc, room_url)
+        print(f"creating bot subprocess {pid}")
+
+        # Set a timeout for the subprocess
+        timeout = 60
+
+        async def monitorProcess():
+            await asyncio.sleep(timeout)
+            if proc.returncode is None:  # If process is still running
+                print("Process timed out. Terminating...")
+                await terminateBot(proc)
+
+        # Schedule the timeout task
+        timeout_task = asyncio.create_task(monitorProcess())
+
+        async def read_stream(stream, callback):
+            while True:
+                line = await stream.readline()
+                if not line:
+                    break
+                callback(line.decode().strip())
+
+        # Schedule reading stdout and stderr
+        await asyncio.gather(
+            read_stream(proc.stdout, lambda x: print(f"mama: {x}")),
+            read_stream(proc.stderr, lambda x: print(f"papa: {x}")),
+            proc.wait()
+        )
+
+        # Cancel the timeout task if the process ends early
+        if not timeout_task.done():
+            timeout_task.cancel()
+
+        print(f"Bot subprocess {pid} ended.")
+        
+    except asyncio.CancelledError:
+        await terminateBot(proc)
+        raise HTTPException(status_code=500, detail=f"Task cancelled. Terminating bot subprocess...")
+
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=f"CalledProcessError: {e}")
+
+    except KeyboardInterrupt:
+        await terminateBot(proc)
+        raise HTTPException(status_code=500, detail="Interrupted by user. Terminating bot subprocess...")
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start subprocess: {e}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
-    return room, proc.pid
+    finally:
+        # Ensure the subprocess is terminated
+        await terminateBot(proc)
 
-def viewProcessStatus(pid: int):
+async def viewProcessStatus(pid: int):
     # Look up the subprocess
     proc = bots.get(pid)
 
