@@ -33,7 +33,7 @@ daily_api_key = os.getenv("DAILY_API_KEY", "")
 daily_api_url = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
 
 
-async def main(room_url: str, token: str, phone: str):
+async def main(room_url: str, token: str, phone: str, sip_uri: str):
     async with aiohttp.ClientSession() as session:
         transport = DailyTransport(
             room_url,
@@ -103,6 +103,8 @@ async def main(room_url: str, token: str, phone: str):
         async def onParticipantLeft(transport, participant, reason):
             await summarize(context, task, phone)
 
+        logger.info("OSDFNOISDNFOINSDOFN CALLING")
+        transport.start_dialout(settings={"sipUri": sip_uri, "phoneNumber": phone})
         await runner.run(task)
 
 
@@ -111,6 +113,7 @@ if __name__ == "__main__":
     parser.add_argument("-u", type=str, help="Room URL")
     parser.add_argument("-t", type=str, help="Token")
     parser.add_argument("-p", type=str, help="Phone")
+    parser.add_argument("-s", type=str, help="Sip URI")
     config = parser.parse_args()
 
-    asyncio.run(main(config.u, config.t, config.p))
+    asyncio.run(main(config.u, config.t, config.p, config.s))

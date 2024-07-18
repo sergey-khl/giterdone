@@ -94,7 +94,7 @@ async def joinDailyRoom(room_url, phone):
             status_code=500, detail=f"Failed to get room or token token"
         )
 
-    bot_proc = f"python3 -m pipeline -u {room.url} -t {token} -p {phone}"
+    bot_proc = f"python3 -m pipeline -u {room.url} -t {token} -p {phone} -s {room.config.sip_uri}"
 
     try:
         # create async process and handle timeout in the background
@@ -121,7 +121,7 @@ async def joinDailyRoom(room_url, phone):
         # Schedule the timeout task
         timeout_task = asyncio.create_task(monitorProcess())
 
-        async def read_stream(stream, callback):
+        async def readStream(stream, callback):
             while True:
                 line = await stream.readline()
                 if not line:
@@ -130,8 +130,8 @@ async def joinDailyRoom(room_url, phone):
 
         # Schedule reading stdout and stderr
         await asyncio.gather(
-            read_stream(proc.stdout, lambda x: print(f"mama: {x}")),
-            read_stream(proc.stderr, lambda x: print(f"papa: {x}")),
+            readStream(proc.stdout, lambda x: print(f"mama: {x}")),
+            readStream(proc.stderr, lambda x: print(f"papa: {x}")),
             proc.wait(),
         )
 
