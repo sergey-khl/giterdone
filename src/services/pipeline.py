@@ -1,40 +1,50 @@
+import argparse
 import asyncio
-import aiohttp
 import logging
 import os
-import argparse
 
+import aiohttp
+from custom_pipeline_runner import CustomPipelineRunner, summarize
+from dotenv import load_dotenv
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.llm_response import (
-    OpenAILLMContext,
-    LLMUserContextAggregator,
     LLMAssistantContextAggregator,
+    LLMUserContextAggregator,
+    OpenAILLMContext,
     OpenAILLMContextFrame,
 )
 from pipecat.processors.logger import FrameLogger
-from pipecat.services.openai import OpenAILLMService
 from pipecat.services.deepgram import DeepgramTTSService
-from pipecat.transports.services.daily import DailyParams, DailyTransport
+from pipecat.services.openai import OpenAILLMService
+from pipecat.transports.services.daily import (
+    DailyDialinSettings,
+    DailyParams,
+    DailyTransport,
+)
 from pipecat.vad.silero import SileroVADAnalyzer
-from loguru import logger
-from prompts import *
-from custom_pipeline_runner import CustomPipelineRunner, summarize
-
-from dotenv import load_dotenv
+from prompts import BASE_PROMPT
+from twilio.rest import Client
 
 load_dotenv(override=True)
 
-logging.basicConfig(format=f"%(levelno)s %(asctime)s %(message)s")
+logging.basicConfig(format="%(levelno)s %(asctime)s %(message)s")
 logger = logging.getLogger("pipecat")
 logger.setLevel(logging.DEBUG)
 
 daily_api_key = os.getenv("DAILY_API_KEY", "")
 daily_api_url = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
+twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+twilioclient = Client(twilio_account_sid, twilio_auth_token)
 
 
-async def main(room_url: str, token: str, phone: str, sip_uri: str):
+async def main(room_url: str, token: str, phone: str, call_id: str, sip_uri: str):
     async with aiohttp.ClientSession() as session:
+        # diallin_settings = DailyDialinSettings(
+        #     call_id=dial_code, call_domain="bear.daily.co"
+        # )
+
         transport = DailyTransport(
             room_url,
             token,
@@ -103,8 +113,20 @@ async def main(room_url: str, token: str, phone: str, sip_uri: str):
         async def onParticipantLeft(transport, participant, reason):
             await summarize(context, task, phone)
 
-        logger.info("OSDFNOISDNFOINSDOFN CALLING")
-        transport.start_dialout(settings={"sipUri": sip_uri, "phoneNumber": phone})
+        @transport.event_handler("on_dialin_ready")
+        async def onDialinReady(transport, cdata):
+            # For Twilio, Telnyx, etc. You need to update the state of the call
+            # and forward it to the sip_uri..
+            print(f"Forwarding call: {call_id} {sip_uri}")
+
+            try:
+                # The TwiML is updated using Twilio's client library
+                call = twilioclient.calls(call_id).update(
+                    twiml=f"<Response><Dial><Sip>{sip_uri}</Sip></Dial></Response>"
+                )
+            except Exception as e:
+                raise Exception(f"Failed to forward call: {str(e)}")
+
         await runner.run(task)
 
 
@@ -113,7 +135,9 @@ if __name__ == "__main__":
     parser.add_argument("-u", type=str, help="Room URL")
     parser.add_argument("-t", type=str, help="Token")
     parser.add_argument("-p", type=str, help="Phone")
-    parser.add_argument("-s", type=str, help="Sip URI")
+    parser.add_argument("-c", type=str, help="call id")
+    parser.add_argument("-s", type=str, help="sip uri")
+    # parser.add_argument("-d", type=str, help="Call Domain")
     config = parser.parse_args()
 
-    asyncio.run(main(config.u, config.t, config.p, config.s))
+    asyncio.run(main(config.u, config.t, config.p, config.c, config.s))
