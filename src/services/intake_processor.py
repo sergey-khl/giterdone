@@ -46,6 +46,6 @@ class IntakeProcessor:
 
     async def sendTodo(self, message):
         logger.info(f"sending sms {message}")
-        # sendSms(self._phone, message)
+        sendSms(self._phone, message)
 
         return None
