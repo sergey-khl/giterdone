@@ -58,7 +58,7 @@ async def main(room_url: str, token: str, from_phone: str, recipient: str, sip_u
         )
 
         default_llm = OpenAILLMService(
-            api_key=os.getenv("OPENAI_API_KEY"), model="gpt-3.5-turbo"
+            api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o"
         )
 
         messages = [BASE_PROMPT]
@@ -112,33 +112,16 @@ async def main(room_url: str, token: str, from_phone: str, recipient: str, sip_u
         async def onDialinReady(transport, cdata):
             # print(f"Forwarding call: {call_id} {sip_uri}")
             print("Dialing in ready")
-            # try:
-            #     # The TwiML is updated using Twilio's client library
-            #     call = twilio_client.calls.create(
-            #         twiml=f"<Response><Dial><Sip>{sip_uri}</Sip></Dial></Response>",
-            #         to=recipient,
-            #         from_=from_phone
-            #     )
-            #     print(f"Creating call: {call} {sip_uri}")
-            # except Exception as e:
-            #     raise Exception(f"Failed to forward call: {str(e)}")
-
-        @transport.event_handler("on_call_state_updated")
-        async def onCallStateUpdated(transport, state):
-            # print(f"Forwarding call: {call_id} {sip_uri}")
-            if state == "joined":
-                try:
-                    # transport.start_dialout({"sipUri": "sip:+15873333657@bear.sip.twilio.com"})
-                    # transport.start_dialout({"phoneNumber": "+15873333657"})
-                    # The TwiML is updated using Twilio's client library
-                    call = twilio_client.calls.create(
-                        twiml=f"<Response><Dial><Sip>{sip_uri}</Sip></Dial></Response>",
-                        to=recipient,
-                        from_=from_phone
-                    )
-                    print(f"Creating call: {call} {sip_uri}")
-                except Exception as e:
-                    raise Exception(f"Failed to start dialout call: {str(e)}")
+            try:
+                # The TwiML is updated using Twilio's client library
+                call = twilio_client.calls.create(
+                    twiml=f"<Response><Dial><Sip>{sip_uri}</Sip></Dial></Response>",
+                    to=recipient,
+                    from_=from_phone
+                )
+                print(f"Creating call: {call} {sip_uri}")
+            except Exception as e:
+                raise Exception(f"Failed to forward call: {str(e)}")
 
         await runner.run(task)
 

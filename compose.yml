@@ -10,6 +10,5 @@ services:
       - .env
     image: giterdone/app
     volumes:
-      - ~/.aws/:/home/user/.aws/:ro
       - ${PWD}/.env:/home/user/app/.env:ro
       - ./src/:/home/user/app/src/
