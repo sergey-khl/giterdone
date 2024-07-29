@@ -68,11 +68,11 @@ def shutdown():
 
 
 """
-Create a daily room
+join a daily room
 """
 
 
-async def joinDailyRoom(room_url, phone, call_id):
+async def joinDailyRoom(room_url, token, sip_endpoint, from_phone, recipient):
     num_bots_in_room = sum(
         1 for proc in bots.values() if proc[1] == room_url and proc[0].poll() is None
     )
@@ -82,36 +82,7 @@ async def joinDailyRoom(room_url, phone, call_id):
             status_code=500, detail=f"Max bot limited reach for room: {room_url}"
         )
 
-    try:
-        params = DailyRoomParams(
-            properties=DailyRoomProperties(
-                # Note: these are the default values, except for the display name
-                sip=DailyRoomSipParams(
-                    display_name="dialin-user",
-                    video=False,
-                    sip_mode="dial-in",
-                    num_endpoints=1,
-                )
-            )
-        )
-
-        print("Creating new room...")
-        room: DailyRoomObject = daily_rest_helper.create_room(params=params)
-
-        # print(f"Joining existing room: {room_url}")
-        # room: DailyRoomObject = daily_rest_helper.get_room_from_url(room_url)
-    except Exception:
-        raise HTTPException(status_code=500, detail=f"Room not found: {room_url}")
-
-    print(f"Daily room: {room.url} {room.config.sip_endpoint} {room.config.sip_uri}")
-
-    # Give the agent a token to join the session
-    token = daily_rest_helper.get_token(room.url, MAX_SESSION_TIME)
-
-    if not room or not token:
-        raise HTTPException(status_code=500, detail="Failed to get room or token token")
-
-    bot_proc = f"python3 -m pipeline -u {room.url} -t {token} -p {phone} -c {call_id} -s {room.config.sip_endpoint}"
+    bot_proc = f"python3 -m pipeline -u {room_url} -t {token} -f {from_phone} -r {recipient} -s {sip_endpoint}"
 
     try:
         # create async process and handle timeout in the background
@@ -181,6 +152,60 @@ async def joinDailyRoom(room_url, phone, call_id):
     finally:
         # Ensure the subprocess is terminated
         await terminateBot(proc)
+
+"""
+Create a daily room
+returns daily room url, sip endpoint and token
+"""
+
+
+async def createDailyRoom() -> tuple[str, str, str]:
+    try:
+        params = DailyRoomParams(
+            properties=DailyRoomProperties(
+                # Note: these are the default values, except for the display name
+                sip=DailyRoomSipParams(
+                    display_name="dialin-user",
+                    video=False,
+                    sip_mode="dial-in",
+                    num_endpoints=1,
+                )
+            )
+        )
+        room: DailyRoomObject = daily_rest_helper.create_room(params=params)
+    except Exception:
+        raise HTTPException(status_code=500, detail="failed to create room")
+
+    print(f"Creating Daily room: {room.url} {room.config.sip_endpoint}")
+
+    # Give the agent a token to join the session
+    token = daily_rest_helper.get_token(room.url, MAX_SESSION_TIME)
+
+    if not room or not token:
+        raise HTTPException(status_code=500, detail="Failed to get room or token")
+
+    return room.url, room.config.sip_endpoint, token
+
+"""
+Get a daily room
+returns daily room url, sip endpoint and token
+"""
+
+
+async def getDailyRoom(room_url: str) -> tuple[str, str, str]:
+    try:
+        room: DailyRoomObject = daily_rest_helper.get_room_from_url(room_url)
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=f"failed to get existing room {room_url}")
+
+    # Give the agent a token to join the session
+    token = daily_rest_helper.get_token(room.url, MAX_SESSION_TIME)
+
+    if not room or not token:
+        raise HTTPException(status_code=500, detail="Failed to get room or token")
+
+    return room.url, room.config.sip_endpoint, token
 
 
 async def viewProcessStatus(pid: int):

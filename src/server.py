@@ -9,7 +9,7 @@ import os
 import argparse
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import bots
+from routes import bots, rooms
 
 from dotenv import load_dotenv
 
@@ -34,6 +34,7 @@ app.add_middleware(
 )
 
 app.include_router(bots.router, prefix="/bots", tags=["bots"])
+app.include_router(rooms.router, prefix="/rooms", tags=["rooms"])
 
 if __name__ == "__main__":
     # Check environment variables

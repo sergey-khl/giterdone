@@ -1,8 +1,8 @@
-from pipecat.processors.aggregators.llm_response import (
-    OpenAILLMContext,
-)
+# from pipecat.processors.aggregators.llm_response import (
+#     OpenAILLMContext,
+# )
 from loguru import logger
-from prompts import *
+from prompts import SUMMARIZE, START_SUMMARIZE
 from typing import List
 from datetime import datetime
 
@@ -46,6 +46,6 @@ class IntakeProcessor:
 
     async def sendTodo(self, message):
         logger.info(f"sending sms {message}")
-        # sendSms(self._phone, message)
+        sendSms(self._phone, message)
 
         return None

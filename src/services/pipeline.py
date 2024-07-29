@@ -18,7 +18,6 @@ from pipecat.processors.logger import FrameLogger
 from pipecat.services.deepgram import DeepgramTTSService
 from pipecat.services.openai import OpenAILLMService
 from pipecat.transports.services.daily import (
-    DailyDialinSettings,
     DailyParams,
     DailyTransport,
 )
@@ -36,15 +35,11 @@ daily_api_key = os.getenv("DAILY_API_KEY", "")
 daily_api_url = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
 twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
 twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-twilioclient = Client(twilio_account_sid, twilio_auth_token)
+twilio_client = Client(twilio_account_sid, twilio_auth_token)
 
 
-async def main(room_url: str, token: str, phone: str, call_id: str, sip_uri: str):
+async def main(room_url: str, token: str, from_phone: str, recipient: str, sip_uri: str):
     async with aiohttp.ClientSession() as session:
-        # diallin_settings = DailyDialinSettings(
-        #     call_id=dial_code, call_domain="bear.daily.co"
-        # )
-
         transport = DailyTransport(
             room_url,
             token,
@@ -100,7 +95,7 @@ async def main(room_url: str, token: str, phone: str, call_id: str, sip_uri: str
         task = PipelineTask(pipeline, PipelineParams(allow_interruptions=True))
 
         runner = CustomPipelineRunner(
-            context=context, summary_task=task.name, phone=phone
+            context=context, summary_task=task.name, phone=recipient
         )
 
         @transport.event_handler("on_first_participant_joined")
@@ -111,21 +106,39 @@ async def main(room_url: str, token: str, phone: str, call_id: str, sip_uri: str
 
         @transport.event_handler("on_participant_left")
         async def onParticipantLeft(transport, participant, reason):
-            await summarize(context, task, phone)
+            await summarize(context, task, recipient)
 
         @transport.event_handler("on_dialin_ready")
         async def onDialinReady(transport, cdata):
-            # For Twilio, Telnyx, etc. You need to update the state of the call
-            # and forward it to the sip_uri..
-            print(f"Forwarding call: {call_id} {sip_uri}")
+            # print(f"Forwarding call: {call_id} {sip_uri}")
+            print("Dialing in ready")
+            # try:
+            #     # The TwiML is updated using Twilio's client library
+            #     call = twilio_client.calls.create(
+            #         twiml=f"<Response><Dial><Sip>{sip_uri}</Sip></Dial></Response>",
+            #         to=recipient,
+            #         from_=from_phone
+            #     )
+            #     print(f"Creating call: {call} {sip_uri}")
+            # except Exception as e:
+            #     raise Exception(f"Failed to forward call: {str(e)}")
 
-            try:
-                # The TwiML is updated using Twilio's client library
-                call = twilioclient.calls(call_id).update(
-                    twiml=f"<Response><Dial><Sip>{sip_uri}</Sip></Dial></Response>"
-                )
-            except Exception as e:
-                raise Exception(f"Failed to forward call: {str(e)}")
+        @transport.event_handler("on_call_state_updated")
+        async def onCallStateUpdated(transport, state):
+            # print(f"Forwarding call: {call_id} {sip_uri}")
+            if state == "joined":
+                try:
+                    # transport.start_dialout({"sipUri": "sip:+15873333657@bear.sip.twilio.com"})
+                    # transport.start_dialout({"phoneNumber": "+15873333657"})
+                    # The TwiML is updated using Twilio's client library
+                    call = twilio_client.calls.create(
+                        twiml=f"<Response><Dial><Sip>{sip_uri}</Sip></Dial></Response>",
+                        to=recipient,
+                        from_=from_phone
+                    )
+                    print(f"Creating call: {call} {sip_uri}")
+                except Exception as e:
+                    raise Exception(f"Failed to start dialout call: {str(e)}")
 
         await runner.run(task)
 
@@ -134,10 +147,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Giterdone chatbot")
     parser.add_argument("-u", type=str, help="Room URL")
     parser.add_argument("-t", type=str, help="Token")
-    parser.add_argument("-p", type=str, help="Phone")
-    parser.add_argument("-c", type=str, help="call id")
+    parser.add_argument("-f", type=str, help="From Phone")
+    parser.add_argument("-r", type=str, help="recipient")
     parser.add_argument("-s", type=str, help="sip uri")
-    # parser.add_argument("-d", type=str, help="Call Domain")
     config = parser.parse_args()
 
-    asyncio.run(main(config.u, config.t, config.p, config.c, config.s))
+    asyncio.run(main(config.u, config.t, config.f, config.r, config.s))

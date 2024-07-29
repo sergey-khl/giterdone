@@ -4,39 +4,28 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from services import runner
 from twilio.twiml.voice_response import VoiceResponse
+from twilio.rest import Client
 
 router = APIRouter()
 
-@router.post("/create-bot", response_class=PlainTextResponse)
-async def createBot(request: Request) -> JSONResponse:
-    # The /daily_start_bot is invoked when a call is received on Daily's SIP URI
-    # daily_start_bot will create the room, put the call on hold until
-    # the bot and sip worker are ready. Daily will automatically
-    # forward the call to the SIP URi when dialin_ready fires.
+twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+twilio_client = Client(twilio_account_sid, twilio_auth_token)
 
-    data = {}
-    try:
-        # shouldnt have received json, twilio sends form data
-        form_data = await request.form()
-        data = dict(form_data)
-    except Exception:
-        pass
 
-    room_url = os.getenv("DAILY_SAMPLE_ROOM_URL", None)
-    call_id = data.get('CallSid')
-    from_phone = data.get('From')
+@router.post("/call-bot", response_class=PlainTextResponse)
+async def createBot(recipient: str) -> PlainTextResponse:
+    room, sip_endpoint, token = await runner.createDailyRoom()
+    twilio_phone = os.getenv("TWILIO_PHONE")
 
-    if not call_id:
-        raise HTTPException(
-            status_code=500, detail="Missing 'CallSid' in request")
+    asyncio.create_task(runner.joinDailyRoom(room, token, sip_endpoint, twilio_phone, recipient))
 
-    asyncio.create_task(runner.joinDailyRoom(room_url, from_phone, call_id))
-
-    # Grab a token for the user to join with
-    resp = VoiceResponse()
-    resp.play(
-        url="http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3", loop=10)
-    return str(resp)
+    # resp = VoiceResponse()
+    # resp.play(
+    #     url="http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3",
+    #     loop=10,
+    # )
+    return twilio_phone
 
 
 @router.get("/status/{pid}")
