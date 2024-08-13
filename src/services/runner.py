@@ -79,6 +79,8 @@ def shutdown():
     loop = asyncio.get_event_loop()
     loop.run_until_complete(cleanup())
 
+async def listAllBots() -> object:
+    return bots
 
 """
 join a daily room

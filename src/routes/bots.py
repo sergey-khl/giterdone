@@ -18,7 +18,9 @@ async def createBot(recipient: str) -> PlainTextResponse:
     room, sip_endpoint, token = await runner.createDailyRoom()
     twilio_phone = os.getenv("TWILIO_PHONE")
 
-    asyncio.create_task(runner.joinDailyRoom(room, token, sip_endpoint, twilio_phone, recipient))
+    asyncio.create_task(
+        runner.joinDailyRoom(room, token, sip_endpoint, twilio_phone, recipient)
+    )
 
     # resp = VoiceResponse()
     # resp.play(
@@ -33,6 +35,13 @@ async def getStatus(pid: int):
     status = await runner.viewProcessStatus(pid)
 
     return JSONResponse({"bot_id": pid, "status": status})
+
+
+@router.get("/get-all")
+async def getAll():
+    bots = await runner.listAllBots()
+
+    return JSONResponse(bots)
 
 
 @router.delete("/remove-bot/all")
