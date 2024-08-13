@@ -26,17 +26,3 @@ async def getRoom(room_name: str) -> JSONResponse:
     room, sip_endpoint, token = await runner.getDailyRoom(room_name)
 
     return JSONResponse({"room_url": room, "sip": sip_endpoint, "token": token})
-
-
-@router.get("/get-all/daily")
-async def getAllDaily():
-    status = await runner.viewProcessStatus(pid)
-
-    return JSONResponse({"bot_id": pid, "status": status})
-
-
-@router.get("/get-all/local")
-async def getAllLocal():
-    status = await runner.viewProcessStatus(pid)
-
-    return JSONResponse({"bot_id": pid, "status": status})
