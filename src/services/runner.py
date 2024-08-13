@@ -79,8 +79,10 @@ def shutdown():
     loop = asyncio.get_event_loop()
     loop.run_until_complete(cleanup())
 
+
 async def listAllBots() -> object:
     return bots
+
 
 """
 join a daily room
@@ -110,6 +112,9 @@ async def joinDailyRoom(room_url, token, sip_endpoint, from_phone, recipient):
         )
         pid = proc.pid
         bots[pid] = (proc, room_url)
+        # attatch bot to room
+        room_name = daily_rest_helper._get_name_from_url(room_url)
+        rooms[room_name][3] = pid
         print(f"creating bot subprocess {pid}")
 
         # Set a timeout for the subprocess
@@ -201,7 +206,8 @@ async def createDailyRoom() -> tuple[str, str, str, str]:
     if not room or not token:
         raise HTTPException(status_code=500, detail="Failed to get room or token")
 
-    rooms[room.name] = (room.url, room.config.sip_endpoint, token)
+    # no bot attatched initially
+    rooms[room.name] = (room.url, room.config.sip_endpoint, token, None)
 
     return room.name, room.url, room.config.sip_endpoint, token
 
@@ -212,10 +218,10 @@ returns daily room url, sip endpoint and token
 """
 
 
-async def deleteDailyRoom(room_url: str) -> tuple[str, bool]:
+async def deleteDailyRoom(room_name: str) -> tuple[str, bool]:
     try:
         res = requests.delete(
-            f"{daily_api_url}/rooms/{room_url}",
+            f"{daily_api_url}/rooms/{room_name}",
             headers={"Authorization": f"Bearer {daily_api_key}"},
         )
 
@@ -225,7 +231,7 @@ async def deleteDailyRoom(room_url: str) -> tuple[str, bool]:
         data = res.json()
 
         try:
-            room = DailyDeletedObject(**data)
+            room: DailyDeletedObject = DailyDeletedObject(**data)
         except ValidationError as e:
             raise Exception(f"Invalid response: {e}")
     except Exception as e:
@@ -235,7 +241,7 @@ async def deleteDailyRoom(room_url: str) -> tuple[str, bool]:
     print(f"Deleting Daily room: {room.name} {room.deleted}")
 
     try:
-        del rooms[room_url]
+        del rooms[room_name]
     except Exception as e:
         print(f"cannot delete from bots table: {e}")
 

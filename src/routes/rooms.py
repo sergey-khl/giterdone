@@ -23,6 +23,6 @@ async def deleteRoom(room_name: str) -> JSONResponse:
 
 @router.get("/get/{room_name}", response_class=JSONResponse)
 async def getRoom(room_name: str) -> JSONResponse:
-    room, sip_endpoint, token = await runner.getDailyRoom(room_name)
+    room, sip_endpoint, local_bot = await runner.getDailyRoom(room_name)
 
-    return JSONResponse({"room_url": room, "sip": sip_endpoint, "token": token})
+    return JSONResponse({"room_url": room, "sip": sip_endpoint, "local_bot": local_bot})

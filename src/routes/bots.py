@@ -15,18 +15,13 @@ twilio_client = Client(twilio_account_sid, twilio_auth_token)
 
 @router.post("/call-bot", response_class=PlainTextResponse)
 async def createBot(recipient: str) -> PlainTextResponse:
-    room, sip_endpoint, token = await runner.createDailyRoom()
+    room_url, sip_endpoint, token = await runner.createDailyRoom()
     twilio_phone = os.getenv("TWILIO_PHONE")
 
     asyncio.create_task(
-        runner.joinDailyRoom(room, token, sip_endpoint, twilio_phone, recipient)
+        runner.joinDailyRoom(room_url, token, sip_endpoint, twilio_phone, recipient)
     )
 
-    # resp = VoiceResponse()
-    # resp.play(
-    #     url="http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3",
-    #     loop=10,
-    # )
     return twilio_phone
 
 
