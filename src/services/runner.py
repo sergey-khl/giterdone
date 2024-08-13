@@ -5,6 +5,7 @@ import signal
 import subprocess
 
 from fastapi import HTTPException
+from pydantic import BaseModel, ValidationError
 from pipecat.transports.services.helpers.daily_rest import (
     DailyRESTHelper,
     DailyRoomObject,
@@ -12,32 +13,44 @@ from pipecat.transports.services.helpers.daily_rest import (
     DailyRoomProperties,
     DailyRoomSipParams,
 )
+import requests
 
 MAX_SESSION_TIME = 5 * 60  # 5 minutes
 
 
+class DailyDeletedObject(BaseModel):
+    deleted: bool
+    name: str
+
+
+daily_api_key = os.getenv("DAILY_API_KEY", "")
+daily_api_url = os.getenv("DAILY_API_URL", "https://api.daily.co/v1")
 daily_rest_helper = DailyRESTHelper(
-    os.getenv("DAILY_API_KEY", ""),
-    os.getenv("DAILY_API_URL", "https://api.daily.co/v1"),
+    daily_api_key,
+    daily_api_url,
 )
+daily_rest_helper.daily_api_key = daily_api_key
+daily_rest_helper.daily_api_url = daily_api_url
 
 # Bot sub-process dict for status reporting and concurrency control
 bots = {}
+# created rooms
+rooms = {}
 
 
 async def cleanup(pid: int = None) -> list[str]:
     removed = []
     # Clean up function, just to be extra safe
     if pid:
-        proc = bots.get(pid)
+        bot = bots.get(pid)
 
         # If the subprocess doesn't exist, return an error
-        if not proc:
+        if not bot:
             raise HTTPException(
                 status_code=404, detail=f"Bot with process id: {pid} not found"
             )
 
-        await terminateBot(proc[0])
+        await terminateBot(bot[0])
         removed.append(pid)
     else:
         # make copy
@@ -74,7 +87,7 @@ join a daily room
 
 async def joinDailyRoom(room_url, token, sip_endpoint, from_phone, recipient):
     num_bots_in_room = sum(
-        1 for proc in bots.values() if proc[1] == room_url and proc[0].poll() is None
+        1 for bot in bots.values() if bot[1] == room_url and bot[0].poll() is None
     )
     print("number of bots in room ", num_bots_in_room)
     if num_bots_in_room >= 1:
@@ -118,8 +131,8 @@ async def joinDailyRoom(room_url, token, sip_endpoint, from_phone, recipient):
 
         # Schedule reading stdout and stderr
         await asyncio.gather(
-            readStream(proc.stdout, lambda x: print(f"mama: {x}")),
-            readStream(proc.stderr, lambda x: print(f"papa: {x}")),
+            readStream(proc.stdout, lambda x: print(f"stdout: {x}")),
+            readStream(proc.stderr, lambda x: print(f"stderr: {x}")),
             proc.wait(),
         )
 
@@ -153,13 +166,14 @@ async def joinDailyRoom(room_url, token, sip_endpoint, from_phone, recipient):
         # Ensure the subprocess is terminated
         await terminateBot(proc)
 
+
 """
 Create a daily room
 returns daily room url, sip endpoint and token
 """
 
 
-async def createDailyRoom() -> tuple[str, str, str]:
+async def createDailyRoom() -> tuple[str, str, str, str]:
     try:
         params = DailyRoomParams(
             properties=DailyRoomProperties(
@@ -172,8 +186,9 @@ async def createDailyRoom() -> tuple[str, str, str]:
                 )
             )
         )
-        room: DailyRoomObject = daily_rest_helper.create_room(params=params)
-    except Exception:
+        room: DailyRoomObject = daily_rest_helper.create_room(params)
+    except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail="failed to create room")
 
     print(f"Creating Daily room: {room.url} {room.config.sip_endpoint}")
@@ -184,7 +199,46 @@ async def createDailyRoom() -> tuple[str, str, str]:
     if not room or not token:
         raise HTTPException(status_code=500, detail="Failed to get room or token")
 
-    return room.url, room.config.sip_endpoint, token
+    rooms[room.name] = (room.url, room.config.sip_endpoint, token)
+
+    return room.name, room.url, room.config.sip_endpoint, token
+
+
+"""
+Delete a daily room
+returns daily room url, sip endpoint and token
+"""
+
+
+async def deleteDailyRoom(room_url: str) -> tuple[str, bool]:
+    try:
+        res = requests.delete(
+            f"{daily_api_url}/rooms/{room_url}",
+            headers={"Authorization": f"Bearer {daily_api_key}"},
+        )
+
+        if res.status_code != 200:
+            raise Exception(f"Unable to delete room: {res.text}")
+
+        data = res.json()
+
+        try:
+            room = DailyDeletedObject(**data)
+        except ValidationError as e:
+            raise Exception(f"Invalid response: {e}")
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail="failed to delete room")
+
+    print(f"Deleting Daily room: {room.name} {room.deleted}")
+
+    try:
+        del rooms[room_url]
+    except Exception as e:
+        print(f"cannot delete from bots table: {e}")
+
+    return room.name, room.deleted
+
 
 """
 Get a daily room
@@ -192,20 +246,23 @@ returns daily room url, sip endpoint and token
 """
 
 
-async def getDailyRoom(room_url: str) -> tuple[str, str, str]:
+async def getDailyRoom(room_name: str) -> tuple[str, str, tuple]:
     try:
-        room: DailyRoomObject = daily_rest_helper.get_room_from_url(room_url)
+        room: DailyRoomObject = daily_rest_helper._get_room_from_name(room_name)
     except Exception as e:
         print(e)
-        raise HTTPException(status_code=500, detail=f"failed to get existing room {room_url}")
+        raise HTTPException(
+            status_code=500, detail=f"failed to get existing room {room_name}"
+        )
 
-    # Give the agent a token to join the session
-    token = daily_rest_helper.get_token(room.url, MAX_SESSION_TIME)
+    local_room = rooms.get(room_name)
+    if not local_room:
+        raise HTTPException(
+            status_code=404,
+            detail=f"local room {room_name} not found but exists in daily",
+        )
 
-    if not room or not token:
-        raise HTTPException(status_code=500, detail="Failed to get room or token")
-
-    return room.url, room.config.sip_endpoint, token
+    return room.url, room.config.sip_endpoint, local_room
 
 
 async def viewProcessStatus(pid: int):

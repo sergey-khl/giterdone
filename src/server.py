@@ -17,10 +17,12 @@ load_dotenv(override=True)
 
 REQUIRED_ENV_VARS = [
     "OPENAI_API_KEY",
-    "DAILY_API_KEY",
     "DEEPGRAM_API_KEY",
+    "DAILY_API_KEY",
     "DAILY_API_URL",
-    "AWS_REGION"
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+    "AWS_REGION",
 ]
 
 app = FastAPI()
